@@ -5,7 +5,7 @@ class ChatRoomController < ApplicationController
       chat_rooms = ChatRoom.where(:$or => [
         { author: current_user["_id"] },
         { member_ids: current_user["_id"] }
-      ])
+      ]).order_by(updated_at: -1)
 
       chat_rooms = chat_rooms.map do |chat_room|
         {
@@ -47,18 +47,32 @@ class ChatRoomController < ApplicationController
         end
     end
 
-    def join_chatroom
-      chatRoom = ChatRoom.where(code: "#WELCOMEMEMBER").first
+    def joins
+      chat_room = ChatRoom.where(code: "##{params[:code]}".upcase).first
+
+      if chat_room.nil?
+        return respond_error(message: "Chat room not found ##{params[:code]}")
+      end
 
       # check password
+      if BCrypt::Password.new(chat_room.password) != join_params
+        return respond_error(message: "Password not match")
+      end
 
-
-      chat_room.members << current_user
-
-      chat_room.save
+      unless chat_room.members.include?(current_user)
+        chat_room.members << User.find(current_user.id)
+        chat_room.save
+        return_json(data: chat_room)
+      else
+        respond_error(message: "User is already a member")
+      end
     end
 
     def body_params
         params.require(:room).permit(:name, :password, :color, :code)
+    end
+
+    def join_params
+      params.require(:password)
     end
 end
